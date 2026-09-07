@@ -13,6 +13,10 @@ export interface ModelRef {
  */
 export interface TaskClient {
 	session: {
+		get(input: {
+			path: { id: string }
+			query?: { directory?: string }
+		}): Promise<{ data?: { id: string; parentID?: string }; error?: unknown }>
 		create(input: {
 			body: { parentID?: string; title?: string }
 			query?: { directory?: string }
@@ -23,6 +27,7 @@ export interface TaskClient {
 			body: {
 				agent?: string
 				model?: ModelRef
+				tools?: Record<string, boolean>
 				parts: Array<{ type: "text"; text: string }>
 			}
 			signal?: AbortSignal
@@ -108,6 +113,20 @@ async function abortQuietly(client: TaskClient, id: string, directory?: string):
  * tool breaking, while the other results survive.
  */
 export async function runTaskWithModel(client: TaskClient, input: RunTaskInput): Promise<string> {
+	try {
+		const caller = await client.session.get({
+			path: { id: input.parentID },
+			query: { directory: input.directory },
+		})
+		if (caller.error) return fail(caller.error)
+		if (!caller.data) return "task_with_model: looking up the calling session returned no session"
+		if (caller.data.parentID) {
+			return "task_with_model: nested delegation is not available; do the work inline in this session"
+		}
+	} catch (error) {
+		return fail(error)
+	}
+
 	let model: ModelRef
 	try {
 		model = parseModelRef(input.model)
@@ -137,6 +156,7 @@ export async function runTaskWithModel(client: TaskClient, input: RunTaskInput):
 			body: {
 				agent: input.agent,
 				model,
+				tools: { task: false, task_with_model: false },
 				parts: [{ type: "text", text: input.prompt }],
 			},
 			signal: input.signal,
