@@ -27,6 +27,23 @@ call. The child session is created with `parentID` set to the caller, so it
 nests under the session that started it rather than becoming another top-level
 session.
 
+## Nested delegation
+
+Nesting is forbidden. `task_with_model` rejects calls from child sessions, and
+children it creates cannot call either `task` or `task_with_model`. A grandchild
+that asks for permission or user input is not surfaced or navigable in the TUI,
+which can leave every session in the delegation chain waiting indefinitely.
+
+To reproduce the protected case manually, use `task_with_model` from a
+top-level session with a prompt that tells the child to call `task_with_model`.
+The child cannot make that tool call because it is disabled. To exercise the
+explicit caller check, invoke `task_with_model` from any child session. It
+returns the following without creating another session:
+
+```text
+task_with_model: nested delegation is not available; do the work inline in this session
+```
+
 ## What it does about failure
 
 Everything comes back as a single `task_with_model: <reason>` line rather than
@@ -80,7 +97,7 @@ npm test
 The plugin file exports only its default plugin factory. OpenCode treats every
 module export as a plugin factory, so another export would stop the plugin from
 loading. The logic therefore lives in `src/run-task.ts`, which also describes
-the client structurally as just the three calls it makes, so the tests can drive
+the client structurally as just the four calls it makes, so the tests can drive
 it with a small fake instead of a running server.
 
 ## License

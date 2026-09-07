@@ -13,6 +13,7 @@ function clientWith(overrides: Partial<Session> = {}): { client: TaskClient; abo
 	const aborted: string[] = []
 	const client: TaskClient = {
 		session: {
+			get: async (input) => ({ data: { id: input.path.id } }),
 			create: async () => ({ data: { id: "ses_child" } }),
 			prompt: async () => ({ data: { parts: [{ type: "text", text: "the answer" }] } }),
 			abort: async (input) => {
@@ -93,10 +94,44 @@ test("the child is created under the caller, on the requested model", async () =
 		body: {
 			agent: "plan",
 			model: { providerID: "anthropic", modelID: "claude-opus-5" },
+			tools: { task: false, task_with_model: false },
 			parts: [{ type: "text", text: "do the thing" }],
 		},
 		signal: undefined,
 	})
+})
+
+test("a child session cannot delegate again", async () => {
+	let createCalls = 0
+	const { client } = clientWith({
+		get: async () => ({ data: { id: "ses_child", parentID: "ses_parent" } }),
+		create: async () => {
+			createCalls++
+			return { data: { id: "ses_grandchild" } }
+		},
+	})
+
+	assert.equal(
+		await runTaskWithModel(client, base),
+		"task_with_model: nested delegation is not available; do the work inline in this session",
+	)
+	assert.equal(createCalls, 0, "a nested call must not create a grandchild session")
+})
+
+test("a calling session lookup failure is reported before session creation", async () => {
+	let createCalls = 0
+	const { client } = clientWith({
+		get: async () => ({ error: { message: "Calling session not found" } }),
+		create: async () => {
+			createCalls++
+			return { data: { id: "ses_child" } }
+		},
+	})
+
+	const result = await runTaskWithModel(client, base)
+	assert.match(result, /^task_with_model: /)
+	assert.match(result, /Calling session not found/)
+	assert.equal(createCalls, 0)
 })
 
 test("a bad model string fails before any session is created", async () => {

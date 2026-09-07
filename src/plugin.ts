@@ -12,7 +12,7 @@ export default (async ({ client }) => ({
 	tool: {
 		task_with_model: tool({
 			description:
-				"Run a prompt to completion in a child session on a model you name, and return its answer as text. Use when the model matters: a second opinion from another provider, or the same task sent to several models at once. The built-in task tool cannot do this, because a subagent's model is fixed in its agent file. Calls issued together run concurrently.",
+				"Run a prompt to completion in a child session on a model you name, and return its answer as text. Available only from a top-level session; child sessions must do their work inline. Use when the model matters: a second opinion from another provider, or the same task sent to several models at once. The built-in task tool cannot do this, because a subagent's model is fixed in its agent file. Calls issued together run concurrently.",
 			args: {
 				prompt: tool.schema.string().min(1).describe("The task for the child session to carry out."),
 				model: tool.schema
