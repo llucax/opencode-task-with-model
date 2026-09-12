@@ -27,6 +27,8 @@ export interface TaskClient {
 			body: {
 				agent?: string
 				model?: ModelRef
+				// The v1 SDK types omit variant, but the v1 server route accepts it.
+				variant?: string
 				tools?: Record<string, boolean>
 				parts: Array<{ type: "text"; text: string }>
 			}
@@ -50,6 +52,7 @@ export interface RunTaskInput {
 	parentID: string
 	prompt: string
 	model: string
+	variant?: string
 	agent?: string
 	title?: string
 	directory?: string
@@ -127,6 +130,10 @@ export async function runTaskWithModel(client: TaskClient, input: RunTaskInput):
 		return fail(error)
 	}
 
+	if (input.variant !== undefined && input.variant.trim() === "") {
+		return "task_with_model: Variant must not be blank"
+	}
+
 	let model: ModelRef
 	try {
 		model = parseModelRef(input.model)
@@ -156,6 +163,7 @@ export async function runTaskWithModel(client: TaskClient, input: RunTaskInput):
 			body: {
 				agent: input.agent,
 				model,
+				...(input.variant === undefined ? {} : { variant: input.variant }),
 				tools: { task: false, task_with_model: false },
 				parts: [{ type: "text", text: input.prompt }],
 			},
