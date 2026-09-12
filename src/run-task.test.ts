@@ -99,6 +99,48 @@ test("the child is created under the caller, on the requested model", async () =
 		},
 		signal: undefined,
 	})
+	assert.equal(Object.hasOwn((prompted as { body: object }).body, "variant"), false)
+})
+
+test("a variant reaches the requested model's prompt", async () => {
+	let prompted: Parameters<Session["prompt"]>[0] | undefined
+	const { client } = clientWith({
+		prompt: async (input) => {
+			prompted = input
+			return { data: { parts: [{ type: "text", text: "hi" }] } }
+		},
+	})
+
+	await runTaskWithModel(client, {
+		...base,
+		model: "openrouter/meta-llama/llama-3",
+		variant: "high",
+	})
+
+	assert.deepEqual(prompted?.body.model, {
+		providerID: "openrouter",
+		modelID: "meta-llama/llama-3",
+	})
+	assert.equal(prompted?.body.variant, "high")
+})
+
+test("a blank variant fails before any session is created", async () => {
+	let getCalls = 0
+	let createCalls = 0
+	const { client } = clientWith({
+		get: async (input) => {
+			getCalls++
+			return { data: { id: input.path.id } }
+		},
+		create: async () => {
+			createCalls++
+			return { data: { id: "ses_child" } }
+		},
+	})
+
+	assert.equal(await runTaskWithModel(client, { ...base, variant: " \n" }), "task_with_model: Variant must not be blank")
+	assert.equal(getCalls, 1, "caller policy must be checked before input validation")
+	assert.equal(createCalls, 0)
 })
 
 test("a child session cannot delegate again", async () => {

@@ -19,6 +19,13 @@ export default (async ({ client }) => ({
 					.string()
 					.min(1)
 					.describe("Model to run it on, as 'provider/model', for example anthropic/claude-opus-5."),
+				variant: tool.schema
+					.string()
+					.min(1)
+					.optional()
+					.describe(
+						"Model variant, such as an effort or thinking level. Valid values depend on the model and variants configured in opencode.json.",
+					),
 				agent: tool.schema
 					.string()
 					.optional()
@@ -37,6 +44,7 @@ export default (async ({ client }) => ({
 					parentID: context.sessionID,
 					prompt: args.prompt,
 					model: args.model,
+					variant: args.variant,
 					agent: args.agent,
 					title: args.title,
 					directory: args.directory ?? context.directory,

@@ -7,7 +7,7 @@ It registers one tool:
 
 | Tool | Required arguments | Optional arguments | Result |
 |---|---|---|---|
-| `task_with_model` | `prompt`, `model` | `agent`, `title`, `directory` | Runs the prompt in a child session on that model and returns its answer. |
+| `task_with_model` | `prompt`, `model` | `variant`, `agent`, `title`, `directory` | Runs the prompt in a child session on that model and returns its answer. |
 
 ## Why
 
@@ -66,12 +66,22 @@ Four outcomes are handled rather than assumed:
 IDs never contain a slash but model IDs can, so `openrouter/meta-llama/llama-3`
 is the `openrouter` provider serving `meta-llama/llama-3`.
 
-There is deliberately no `variant`, `temperature` or `reasoning_effort`
-argument. Model choice is supported by the API; sampling and reasoning knobs are
-not. A plugin's client is the SDK's v1 surface, where the `session.prompt` body
-is exactly `messageID`, `model`, `agent`, `noReply`, `system`, `tools` and
-`parts` — there is no field to put them in. They exist only as variants
-configured in `opencode.json`.
+For model routing, the optional `variant` is OpenCode's per-prompt reasoning
+effort control. More generally, a variant is a named bundle of provider options:
+the same name can become `reasoningEffort` for one provider, Anthropic's
+`effort` for another, Gemini's `thinkingLevel` for a third, or a computed token
+budget for a budget-only model. This makes variants portable across providers
+without exposing their different option formats.
+
+Valid names come from the selected model's advertised or configured variants,
+so the ladder differs by model and provider and can be extended in
+`opencode.json`. A model with no advertised variants has no tunable effort.
+OpenCode currently accepts unknown variant names but applies no variant options
+for them, so callers should use a value exposed or configured for that model.
+
+There is deliberately no `temperature` or `reasoning_effort` argument. The v1
+`session.prompt` API has no fields for those individual knobs. Configure them as
+model variants in `opencode.json`, then select the resulting variant by name.
 
 ## Installing
 
