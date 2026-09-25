@@ -188,6 +188,13 @@ unless `KEEP=1`. Run it after upgrading OpenCode:
 OPENAI_FAKE_PROVIDER=../openai-fake-provider/openai_fake_provider.py scripts/e2e.sh
 ```
 
+CI runs it in OpenCode's official container image, built from
+`.github/e2e/Dockerfile`, both on the version pinned there and on the latest
+release: on every pull request and push, and weekly. A failure on the latest
+release only fails the weekly run, which is what sends a notification.
+Dependabot bumps the pinned image; bump the "checked against" version above
+along with it.
+
 The plugin files export only their default plugin factory. OpenCode treats
 every module export as a plugin factory, so another export would stop the
 plugin from loading. The logic therefore lives in `src/run-task.ts` and

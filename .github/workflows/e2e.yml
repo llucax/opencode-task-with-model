@@ -1,0 +1,59 @@
+name: E2E
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  schedule:
+    # Weekly, to hear about an OpenCode release that breaks the hooks.
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    name: E2E (OpenCode ${{ matrix.opencode }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        # pinned: the version in .github/e2e/Dockerfile, which the README
+        # says the hooks were checked against.
+        # latest: whatever OpenCode released last. It only fails the run on
+        # the schedule, so a new release breaking the hooks sends a
+        # notification without turning pull requests red.
+        opencode:
+          - pinned
+          - latest
+    continue-on-error: ${{ matrix.opencode == 'latest' && github.event_name != 'schedule' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: llucax/openai-fake-provider
+          # Not bumped by Dependabot; update it by hand when the script needs
+          # something newer.
+          ref: b32b6fe1ff376cec544c6f6fdbd4f99ef8cd6e3c
+          path: openai-fake-provider
+
+      - name: Build the test image
+        env:
+          OPENCODE: ${{ matrix.opencode }}
+        run: |
+          args=()
+          if [ "$OPENCODE" = latest ]; then
+            args=(--pull --build-arg OPENCODE_IMAGE=ghcr.io/anomalyco/opencode:latest)
+          fi
+          docker build "${args[@]}" --tag e2e .github/e2e
+          docker run --rm e2e opencode --version
+
+      - name: Run scripts/e2e.sh
+        run: >-
+          docker run --rm
+          --volume "$PWD:/repo" --workdir /repo
+          --env OPENAI_FAKE_PROVIDER=openai-fake-provider/openai_fake_provider.py
+          e2e scripts/e2e.sh
