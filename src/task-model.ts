@@ -16,7 +16,8 @@ import { parseModelRef, type ModelRef } from "./run-task.ts"
  *    metadata by then, which is how the child is matched to its call, even
  *    when several calls with the same prompt run at once.
  * 4. `tool.execute.after` checks that the child really ran on the requested
- *    model, and says so in the output if it did not.
+ *    model, says so in the output if it did not, and puts the route it ran
+ *    on before the result.
  *
  * Steps 1 and 3 rely on behavior the plugin API does not document, which is
  * why step 4 exists: if an OpenCode upgrade breaks it, the caller is told
@@ -266,6 +267,18 @@ export function latestModel(childMessages: SessionMessage[]): MessageModel | und
 }
 
 /**
+ * The line put before a task's result naming the route its child ran on.
+ *
+ * The plugin removes `model` and `variant` from the call's arguments, so the
+ * stored call shows neither; without this line neither the caller nor anyone
+ * reading the session later could tell which route the child used.
+ */
+export function describeRoute(model: MessageModel): string {
+	const variant = model.variant ? `variant ${model.variant}` : "no variant"
+	return `task-model: ran on ${model.providerID}/${model.modelID}, ${variant}`
+}
+
+/**
  * A warning when the child's newest message is not on the requested model,
  * or undefined when it matches or there is nothing to check yet.
  */
@@ -353,7 +366,10 @@ export function createTaskModelHooks(client: TaskModelClient, options: { warn?: 
 				// child's sessionId before prompting it, or chat.message stopped
 				// firing for it. Either way the default model ran.
 				(override.applied ? undefined : `task: the model override was never applied to the subagent. ${FALLBACK_HINT}`)
-			if (mismatch) output.output = `${mismatch}\n\n${output.output}`
+			// The warning stays first; the route follows it, verified rather
+			// than as requested.
+			const lines = [mismatch, ran && describeRoute(ran)].filter((line) => line)
+			if (lines.length) output.output = `${lines.join("\n")}\n\n${output.output}`
 		},
 	}
 }

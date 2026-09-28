@@ -132,8 +132,8 @@ call_task "$s" '{"description": "override", "prompt": "with override", "subagent
 check "override: child on fake/stats, variant high" \
 	test "$(child_messages "$s")" = '[{"role":"user","model":"stats","variant":"high"},{"role":"assistant","model":"stats","variant":"high"}]'
 part=$(task_part "$s")
-check "override: call completed without a warning" \
-	jq -e '.state.status == "completed" and (.state.output | startswith("<task"))' <<<"$part"
+check "override: call completed with its route and without a warning" \
+	jq -e '.state.status == "completed" and (.state.output | startswith("task-model: ran on fake/stats, variant high\n\n<task"))' <<<"$part"
 check "override: metadata reports fake/stats" \
 	jq -e '.state.metadata.model.modelID == "stats"' <<<"$part"
 check "override: fake provider got a request for stats" \

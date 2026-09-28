@@ -108,6 +108,14 @@ any child session is created. A `model` without `variant` drops the caller's
 variant, since it may not exist for the new model; a `variant` without `model`
 keeps the subagent's model.
 
+The plugin removes both arguments before the built-in sees them, so the
+recorded call shows neither. Instead, the result of a call that passed either
+starts with the route the subagent actually ran on, read from its messages:
+
+```text
+task-model: ran on anthropic/claude-opus-5, variant high
+```
+
 ### How it works, and what it relies on
 
 When the model calls `task` with an override, the plugin removes `model` and
@@ -129,7 +137,7 @@ API. They were checked against OpenCode 1.18.32:
 
 When a call finishes, the plugin reads the model the child actually ran on. If
 it isn't the requested one, or the override never reached the child, the tool
-output starts with a line saying so:
+output starts with a line saying so, before the route line:
 
 ```text
 task: requested model anthropic/claude-opus-5 but the subagent ran on openai/gpt-6. The model override for the task tool may have stopped working with this OpenCode version; use task_with_model to choose a model.

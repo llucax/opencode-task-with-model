@@ -4,6 +4,7 @@ import {
 	applyOverride,
 	createTaskModelHooks,
 	describeMismatch,
+	describeRoute,
 	ensureModelExists,
 	extendTaskDefinition,
 	findTaskCall,
@@ -339,18 +340,34 @@ test("an old calling message is still found", async () => {
 	assert.deepEqual(server.limits, [10, undefined])
 })
 
-test("a finished call on the right model gets its metadata fixed and no warning", async () => {
+test("the route line names the model and the variant, or its absence", () => {
+	assert.equal(describeRoute({ ...opus, variant: "high" }), "task-model: ran on anthropic/claude-opus-5, variant high")
+	assert.equal(describeRoute(opus), "task-model: ran on anthropic/claude-opus-5, no variant")
+})
+
+test("a finished call on the right model gets its metadata fixed, its route and no warning", async () => {
 	const server = fakeServer()
 	const hooks = createTaskModelHooks(server.client)
-	await hooks["tool.execute.before"]({ tool: "task", callID: "call_1" }, { args: { model: "anthropic/claude-opus-5" } })
+	await hooks["tool.execute.before"]({ tool: "task", callID: "call_1" }, { args: { model: "anthropic/claude-opus-5", variant: "high" } })
 	server.startChild("call_1", "ses_child")
 	await hooks["chat.message"]({ sessionID: "ses_child" }, { message: defaultModel() })
-	server.messages.ses_child = [userMessage(opus), assistantMessage("anthropic", "claude-opus-5")]
+	server.messages.ses_child = [userMessage({ ...opus, variant: "high" }), assistantMessage("anthropic", "claude-opus-5", 2, "high")]
 
 	const output = { output: "<task>answer</task>", metadata: { sessionId: "ses_child", model: defaultModel().model } }
 	await hooks["tool.execute.after"]({ tool: "task", callID: "call_1" }, output)
-	assert.equal(output.output, "<task>answer</task>")
+	assert.equal(output.output, "task-model: ran on anthropic/claude-opus-5, variant high\n\n<task>answer</task>")
 	assert.deepEqual(output.metadata.model, opus)
+})
+
+test("a call without an override gets no route line", async () => {
+	const server = fakeServer()
+	const hooks = createTaskModelHooks(server.client)
+	await hooks["tool.execute.before"]({ tool: "task", callID: "call_1" }, { args: { prompt: "p" } })
+	server.startChild("call_1", "ses_child")
+	server.messages.ses_child = [userMessage(defaultModel().model), assistantMessage("openai", "gpt-6")]
+	const output = { output: "<task>answer</task>", metadata: { sessionId: "ses_child" } }
+	await hooks["tool.execute.after"]({ tool: "task", callID: "call_1" }, output)
+	assert.equal(output.output, "<task>answer</task>")
 })
 
 test("a child that ran on the wrong model is reported in the output", async () => {
@@ -368,7 +385,8 @@ test("a child that ran on the wrong model is reported in the output", async () =
 	}
 	await hooks["tool.execute.after"]({ tool: "task", callID: "call_1" }, output)
 	assert.match(output.output, /^task: requested model anthropic\/claude-opus-5 but the subagent ran on openai\/gpt-6/)
-	assert.match(output.output, /<task>answer<\/task>$/)
+	// The warning comes first, then the route the child really ran on.
+	assert.match(output.output, /\ntask-model: ran on openai\/gpt-6, no variant\n\n<task>answer<\/task>$/)
 	// The metadata tells the truth rather than what was asked for.
 	assert.deepEqual(output.metadata.model, { providerID: "openai", modelID: "gpt-6" })
 })
