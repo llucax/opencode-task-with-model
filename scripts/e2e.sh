@@ -121,6 +121,8 @@ call_task "$s" '{"description": "default", "prompt": "no override", "subagent_ty
 first=$(ls "$tmp"/dump/*-prompt.json | head -1)
 check "task schema has model and variant" \
 	jq -e '.tools[] | select(.function.name == "task") | .function.parameters.properties | has("model") and has("variant")' "$first"
+check "task description starts with the announcement rule" \
+	jq -e '.tools[] | select(.function.name == "task") | .function.description | startswith("Before calling `task`")' "$first"
 
 # 2. Without an override the child keeps the default model.
 check "no override: child on fake/ok" \

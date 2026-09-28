@@ -33,8 +33,11 @@ const MODEL_DESCRIPTION =
 	"Model to run the subagent on, as 'provider/model', overriding the agent's own model. Omit to keep the default."
 const VARIANT_DESCRIPTION =
 	"Model variant, such as an effort or thinking level. Valid values depend on the model and the variants configured in opencode.json."
+/** Goes first in the description: at the end, after the long built-in text, models were seen skipping it. */
+const TOOL_RULE =
+	"Before calling `task`, write one line per task with its agent, model and variant (the agent's default when omitted), since the sub-task view doesn't show them."
 const TOOL_NOTE =
-	"Pass `model` (as provider/model) and optionally `variant` only when the subagent must run on a specific model; otherwise leave them out. Before calling `task`, write one line per task with its agent, model and variant (the agent's default when omitted), since the sub-task view doesn't show them."
+	"Pass `model` (as provider/model) and optionally `variant` only when the subagent must run on a specific model; otherwise leave them out."
 
 const FALLBACK_HINT =
 	"The model override for the task tool may have stopped working with this OpenCode version; use task_with_model to choose a model."
@@ -109,6 +112,9 @@ export function extendTaskDefinition(output: { description: string; jsonSchema?:
 	extended.properties.model = { type: "string", description: MODEL_DESCRIPTION }
 	extended.properties.variant = { type: "string", description: VARIANT_DESCRIPTION }
 	output.jsonSchema = extended
+	// Done here rather than in a static override: another plugin may have
+	// replaced the description earlier in the same hook chain.
+	if (!output.description.includes(TOOL_RULE)) output.description = `${TOOL_RULE}\n\n${output.description}`
 	if (!output.description.includes(TOOL_NOTE)) output.description = `${output.description}\n\n${TOOL_NOTE}`
 	return true
 }

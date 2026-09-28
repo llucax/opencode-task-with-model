@@ -57,6 +57,16 @@ test("the task definition gains optional model and variant arguments", () => {
 	assert.match(output.description, /`model`/)
 })
 
+test("the announcement rule goes first and the usage note last", () => {
+	// At the end of the long built-in description the rule was seen ignored.
+	const output = taskDefinition()
+	extendTaskDefinition(output)
+	const [first, ...rest] = output.description.split("\n\n")
+	assert.match(first, /^Before calling `task`, write one line per task/)
+	assert.equal(rest[0], "Launch a new agent.")
+	assert.match(rest.at(-1) ?? "", /^Pass `model`/)
+})
+
 test("the registry's own schema object is left untouched", () => {
 	// The hook gets the stored definition's schema; editing it in place would
 	// change the definition for every later request.
@@ -67,12 +77,14 @@ test("the registry's own schema object is left untouched", () => {
 	assert.deepEqual(Object.keys(original.properties), ["description", "prompt", "subagent_type"])
 })
 
-test("extending the description twice adds the note once", () => {
+test("extending the description twice adds the rule and the note once", () => {
 	const output = taskDefinition()
 	extendTaskDefinition(output)
 	const once = output.description
 	extendTaskDefinition(output)
 	assert.equal(output.description, once)
+	assert.equal(once.split("Before calling `task`").length, 2)
+	assert.equal(once.split("Pass `model`").length, 2)
 })
 
 test("a definition without a JSON Schema is left alone", () => {
