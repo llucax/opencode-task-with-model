@@ -305,12 +305,29 @@ export function describeMismatch(override: Override, childMessages: SessionMessa
 	return `task: ${problems.join("; ")}. ${FALLBACK_HINT}`
 }
 
+/** The toast shown when a child starts on an overridden route, such as `task: explore on openai/gpt-6 (low)`. */
+export function describeStart(agent: string | undefined, model: MessageModel): string {
+	const variant = model.variant ? ` (${model.variant})` : ""
+	return `task: ${agent ?? "subagent"} on ${model.providerID}/${model.modelID}${variant}`
+}
+
 type HookOutput<T> = T & Record<string, unknown>
 
+export interface TaskModelOptions {
+	/** Where to report problems with the plugin itself. */
+	warn?: (message: string) => void
+	/**
+	 * Called with `describeStart`'s text when a child starts on an overridden
+	 * route. Whatever it throws or rejects with is dropped.
+	 */
+	toast?: (message: string) => unknown
+}
+
 /** The hooks, built over a client so the tests can drive them with a fake. */
-export function createTaskModelHooks(client: TaskModelClient, options: { warn?: (message: string) => void } = {}) {
+export function createTaskModelHooks(client: TaskModelClient, options: TaskModelOptions = {}) {
 	const pending = new PendingOverrides()
 	const warn = options.warn ?? (() => {})
+	const toast = options.toast
 	let warnedNoSchema = false
 
 	return {
@@ -329,7 +346,10 @@ export function createTaskModelHooks(client: TaskModelClient, options: { warn?: 
 			pending.add(input.callID, override)
 		},
 
-		"chat.message": async (input: { sessionID: string }, output: { message: { model: MessageModel } }) => {
+		"chat.message": async (
+			input: { sessionID: string; agent?: string },
+			output: { message: { model: MessageModel; agent?: string } },
+		) => {
 			if (pending.size === 0) return
 			const session = await client.session.get({ path: { id: input.sessionID } })
 			const parentID = session.data?.parentID
@@ -345,6 +365,13 @@ export function createTaskModelHooks(client: TaskModelClient, options: { warn?: 
 			const override = callID && pending.claim(callID)
 			if (!override) return
 			output.message.model = applyOverride(output.message.model, override)
+			if (toast) {
+				// Not awaited, and never allowed to fail the child's message.
+				const message = describeStart(output.message.agent ?? input.agent, output.message.model)
+				Promise.resolve()
+					.then(() => toast(message))
+					.catch(() => {})
+			}
 		},
 
 		"tool.execute.after": async (

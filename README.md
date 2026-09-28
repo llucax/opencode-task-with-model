@@ -116,6 +116,16 @@ starts with the route the subagent actually ran on, read from its messages:
 task-model: ran on anthropic/claude-opus-5, variant high
 ```
 
+With the `toast` option on, the TUI also shows a toast when a subagent starts
+on an overridden route, naming its agent, model and variant:
+
+```text
+task: explore on openai/gpt-6 (low)
+```
+
+It is off by default. A toast that can't be shown is ignored and never fails
+the task.
+
 ### How it works, and what it relies on
 
 When the model calls `task` with an override, the plugin removes `model` and
@@ -172,6 +182,22 @@ plugin file too. It is independent of the first; either can be installed alone:
 ```sh
 ln -sfn "$PWD/src/task-model-plugin.ts" ~/.config/opencode/plugins/task-model.ts
 ```
+
+A plugin installed that way gets no options. To turn on the toast, load it
+through a `plugin` entry in `opencode.json` instead, with a path relative to
+that file or a `file://` URL:
+
+```jsonc
+{
+  "plugin": [
+    ["./path/to/opencode-task-with-model/src/task-model-plugin.ts", { "toast": true }]
+  ]
+}
+```
+
+| Option | Default | Effect |
+|---|---|---|
+| `toast` | `false` | Show a TUI toast when a subagent starts on an overridden route. |
 
 Restart OpenCode after installing or changing the plugin. OpenCode loads
 plugins at startup.

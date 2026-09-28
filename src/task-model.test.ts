@@ -5,6 +5,7 @@ import {
 	createTaskModelHooks,
 	describeMismatch,
 	describeRoute,
+	describeStart,
 	ensureModelExists,
 	extendTaskDefinition,
 	findTaskCall,
@@ -426,6 +427,56 @@ test("a background call is not checked before its child starts, and still gets i
 	const first = { message: defaultModel() }
 	await hooks["chat.message"]({ sessionID: "ses_child" }, first)
 	assert.deepEqual(first.message.model, opus)
+})
+
+test("the start toast names the agent, the model and the variant", () => {
+	assert.equal(describeStart("explore", { ...opus, variant: "low" }), "task: explore on anthropic/claude-opus-5 (low)")
+	assert.equal(describeStart(undefined, opus), "task: subagent on anthropic/claude-opus-5")
+})
+
+/** Let fire-and-forget promises settle. */
+const settle = () => new Promise((resolve) => setImmediate(resolve))
+
+test("a child starting on an overridden route is toasted, once", async () => {
+	const server = fakeServer()
+	const toasts: string[] = []
+	const hooks = createTaskModelHooks(server.client, { toast: (message) => toasts.push(message) })
+	// A variant alone: the toast shows the model the child keeps.
+	await hooks["tool.execute.before"]({ tool: "task", callID: "call_1" }, { args: { variant: "low" } })
+	server.startChild("call_1", "ses_child")
+	await hooks["chat.message"]({ sessionID: "ses_child", agent: "explore" }, { message: { ...defaultModel(), agent: "explore" } })
+	await hooks["chat.message"]({ sessionID: "ses_child", agent: "explore" }, { message: { ...defaultModel(), agent: "explore" } })
+	await settle()
+	assert.deepEqual(toasts, ["task: explore on openai/gpt-6 (low)"])
+})
+
+test("a call without an override is not toasted", async () => {
+	const server = fakeServer()
+	const toasts: string[] = []
+	const hooks = createTaskModelHooks(server.client, { toast: (message) => toasts.push(message) })
+	await hooks["tool.execute.before"]({ tool: "task", callID: "call_1" }, { args: { prompt: "p" } })
+	server.startChild("call_1", "ses_child")
+	await hooks["chat.message"]({ sessionID: "ses_child" }, { message: defaultModel() })
+	await settle()
+	assert.deepEqual(toasts, [])
+})
+
+test("a failing toast doesn't fail the child's message", async () => {
+	for (const toast of [
+		() => {
+			throw new Error("no TUI")
+		},
+		() => Promise.reject(new Error("no TUI")),
+	]) {
+		const server = fakeServer()
+		const hooks = createTaskModelHooks(server.client, { toast })
+		await hooks["tool.execute.before"]({ tool: "task", callID: "call_1" }, { args: { model: "anthropic/claude-opus-5" } })
+		server.startChild("call_1", "ses_child")
+		const output = { message: defaultModel() }
+		await hooks["chat.message"]({ sessionID: "ses_child" }, output)
+		await settle()
+		assert.deepEqual(output.message.model, opus)
+	}
 })
 
 test("a missing schema is reported once", async () => {
