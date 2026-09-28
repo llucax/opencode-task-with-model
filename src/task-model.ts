@@ -33,7 +33,7 @@ const MODEL_DESCRIPTION =
 const VARIANT_DESCRIPTION =
 	"Model variant, such as an effort or thinking level. Valid values depend on the model and the variants configured in opencode.json."
 const TOOL_NOTE =
-	"Pass `model` (as provider/model) and optionally `variant` only when the subagent must run on a specific model; otherwise leave them out."
+	"Pass `model` (as provider/model) and optionally `variant` only when the subagent must run on a specific model; otherwise leave them out. Before calling `task`, write one line per task with its agent, model and variant (the agent's default when omitted), since the sub-task view doesn't show them."
 
 const FALLBACK_HINT =
 	"The model override for the task tool may have stopped working with this OpenCode version; use task_with_model to choose a model."
