@@ -85,12 +85,18 @@ model variants in `opencode.json`, then select the resulting variant by name.
 
 ## Installing
 
-This repository is not published to npm. Install its dependencies and symlink
-the plugin into OpenCode's plugin directory:
+This repository is not published to npm. Install its dependencies:
 
 ```sh
 npm install
-ln -sfn "$PWD/src/plugin.ts" ~/.config/opencode/plugins/task-with-model.ts
+```
+
+Then add it to the `plugin` array in OpenCode's config
+(`~/.config/opencode/opencode.jsonc`), with a path to this clone, absolute or
+relative to the config file:
+
+```jsonc
+"plugin": ["/path/to/opencode-task-with-model/src/plugin.ts"]
 ```
 
 Restart OpenCode after installing or changing the plugin. OpenCode loads
