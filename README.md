@@ -9,13 +9,17 @@ It registers one tool:
 |---|---|---|---|
 | `task_with_model` | `prompt`, `model` | `variant`, `agent`, `title`, `directory` | Runs the prompt in a child session on that model and returns its answer. |
 
+A second, opt-in plugin file adds the same choice to OpenCode's built-in
+`task` tool instead, as optional `model` and `variant` arguments; see [Model
+choice on the built-in task tool](#model-choice-on-the-built-in-task-tool-opt-in).
+
 ## Why
 
-The built-in `task` tool cannot choose a model. A subagent's model is pinned in
-its agent file, so asking two providers the same question means maintaining two
-near-identical subagents that differ only by that line. `model` is an argument
-here, which collapses them into one call site that can pick against whatever
-quota is left:
+Out of the box, the built-in `task` tool cannot choose a model. A subagent's
+model is pinned in its agent file, so asking two providers the same question
+means maintaining two near-identical subagents that differ only by that line.
+`model` is an argument here, which collapses them into one call site that can
+pick against whatever quota is left:
 
 ```
 task_with_model(model = "anthropic/claude-opus-5", prompt = "Review this diff: ...")
@@ -83,6 +87,85 @@ There is deliberately no `temperature` or `reasoning_effort` argument. The v1
 `session.prompt` API has no fields for those individual knobs. Configure them as
 model variants in `opencode.json`, then select the resulting variant by name.
 
+## Model choice on the built-in task tool (opt-in)
+
+`src/task-model-plugin.ts` adds two optional arguments to the built-in `task`
+tool: `model`, written `provider/model` as above, and `variant`. The subagent
+runs on that model instead of its own, even when its agent file pins one:
+
+```
+task(subagent_type = "explore", model = "anthropic/claude-opus-5", variant = "high", prompt = "...")
+```
+
+It works through plugin hooks on the built-in tool rather than by replacing it,
+so everything the built-in does stays as it is: the live sub-task view in the
+TUI, `task` permissions, `subagent_depth`, `task_id` resumption, `@agent`
+mentions and commands with `subtask: true`. Calls without the new arguments
+behave exactly as before.
+
+A malformed `model`, or one no configured provider has, fails the call before
+any child session is created. A `model` without `variant` drops the caller's
+variant, since it may not exist for the new model; a `variant` without `model`
+keeps the subagent's model.
+
+The plugin removes both arguments before the built-in sees them, so the
+recorded call shows neither. Instead, the result of a call that passed either
+starts with the route the subagent actually ran on, read from its messages:
+
+```text
+task-model: ran on anthropic/claude-opus-5, variant high
+```
+
+With the `toast` option on, the TUI also shows a toast when a subagent starts
+on an overridden route, naming its agent, model and variant:
+
+```text
+task: explore on openai/gpt-6 (low)
+```
+
+It is off by default. A toast that can't be shown is ignored and never fails
+the task.
+
+### How it works, and what it relies on
+
+When the model calls `task` with an override, the plugin removes `model` and
+`variant` from the arguments and remembers them by the call's ID. The built-in
+creates the child session and writes the child's ID into its tool call's
+metadata before prompting it, and the plugin's `chat.message` hook uses that ID
+to find the call and switch the child's first message to the requested model.
+The match is by call, so parallel calls with identical prompts each get their
+own model.
+
+Three of the behaviors this needs are not part of OpenCode's documented plugin
+API. They were checked against OpenCode 1.18.32:
+
+- The `tool.definition` hook receives the tool's JSON Schema as `jsonSchema`,
+  and a changed one is what the model sees.
+- A change to the user message's model in `chat.message` is saved and used for
+  that turn.
+- The built-in publishes the child's session ID before prompting it.
+
+When a call finishes, the plugin reads the model the child actually ran on. If
+it isn't the requested one, or the override never reached the child, the tool
+output starts with a line saying so, before the route line:
+
+```text
+task: requested model anthropic/claude-opus-5 but the subagent ran on openai/gpt-6. The model override for the task tool may have stopped working with this OpenCode version; use task_with_model to choose a model.
+```
+
+`task_with_model` doesn't depend on any of this, which is why it stays: it is
+the fallback when an OpenCode upgrade breaks these hooks.
+
+### Known limitations
+
+- The child session's own record keeps the subagent's default model, while its
+  messages run on the requested one. A follow-up typed into that subagent
+  without choosing a model runs on the default
+  ([#2](https://github.com/llucax/opencode-task-with-model/issues/2)).
+- With OpenCode's experimental background subagents enabled, the built-in's
+  definition has no JSON Schema to extend, so the arguments are not offered;
+  the plugin logs a warning once.
+
 ## Installing
 
 This repository is not published to npm. Install its dependencies and symlink
@@ -92,6 +175,29 @@ the plugin into OpenCode's plugin directory:
 npm install
 ln -sfn "$PWD/src/plugin.ts" ~/.config/opencode/plugins/task-with-model.ts
 ```
+
+To also get `model` and `variant` on the built-in `task` tool, link the second
+plugin file too. It is independent of the first; either can be installed alone:
+
+```sh
+ln -sfn "$PWD/src/task-model-plugin.ts" ~/.config/opencode/plugins/task-model.ts
+```
+
+A plugin installed that way gets no options. To turn on the toast, load it
+through a `plugin` entry in `opencode.json` instead, with a path relative to
+that file or a `file://` URL:
+
+```jsonc
+{
+  "plugin": [
+    ["./path/to/opencode-task-with-model/src/task-model-plugin.ts", { "toast": true }]
+  ]
+}
+```
+
+| Option | Default | Effect |
+|---|---|---|
+| `toast` | `false` | Show a TUI toast when a subagent starts on an overridden route. |
 
 Restart OpenCode after installing or changing the plugin. OpenCode loads
 plugins at startup.
@@ -104,11 +210,31 @@ npm run typecheck
 npm test
 ```
 
-The plugin file exports only its default plugin factory. OpenCode treats every
-module export as a plugin factory, so another export would stop the plugin from
-loading. The logic therefore lives in `src/run-task.ts`, which also describes
-the client structurally as just the four calls it makes, so the tests can drive
-it with a small fake instead of a running server.
+`scripts/e2e.sh` checks the `task` overrides against a real `opencode serve`,
+answered by [openai-fake-provider](https://github.com/llucax/openai-fake-provider)
+so no request reaches a real model. It needs `opencode`, `curl`, `jq` and
+`python3`, plus the fake provider as an `openai-fake-provider` command or
+through `OPENAI_FAKE_PROVIDER`, the path to its `openai_fake_provider.py`.
+Everything OpenCode stores goes to a temporary directory, removed at the end
+unless `KEEP=1`. Run it after upgrading OpenCode:
+
+```sh
+OPENAI_FAKE_PROVIDER=../openai-fake-provider/openai_fake_provider.py scripts/e2e.sh
+```
+
+CI runs it in OpenCode's official container image, built from
+`.github/e2e/Dockerfile`, both on the version pinned there and on the latest
+release: on every pull request and push, and weekly. A failure on the latest
+release only fails the weekly run, which is what sends a notification.
+Dependabot bumps the pinned image; bump the "checked against" version above
+along with it.
+
+The plugin files export only their default plugin factory. OpenCode treats
+every module export as a plugin factory, so another export would stop the
+plugin from loading. The logic therefore lives in `src/run-task.ts` and
+`src/task-model.ts`, which also describe the client structurally as just the
+calls they make, so the tests can drive them with a small fake instead of a
+running server.
 
 ## License
 

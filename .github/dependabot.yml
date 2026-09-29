@@ -1,0 +1,37 @@
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    groups:
+      actions:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    groups:
+      # Released together with OpenCode itself, often several times a week;
+      # one pull request a month is plenty.
+      opencode:
+        patterns:
+          - "@opencode-ai/*"
+      tooling:
+        update-types:
+          - "minor"
+          - "patch"
+
+  # The OpenCode image the end-to-end test runs on, see
+  # .github/e2e/Dockerfile. Bump the "checked against" version in the README
+  # together with it.
+  - package-ecosystem: "docker"
+    directory: "/.github/e2e"
+    schedule:
+      interval: "monthly"
+    groups:
+      opencode:
+        patterns:
+          - "*"
