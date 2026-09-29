@@ -37,7 +37,7 @@ const VARIANT_DESCRIPTION =
 const TOOL_RULE =
 	"Before calling `task`, write one line per task with its agent, model and variant (the agent's default when omitted), since the sub-task view doesn't show them."
 const TOOL_NOTE =
-	"Pass `model` (as provider/model) and optionally `variant` only when the subagent must run on a specific model; otherwise leave them out."
+	"Pass `model` (as provider/model) and optionally `variant` to run the subagent on another model than its agent's default."
 
 const FALLBACK_HINT =
 	"The model override for the task tool may have stopped working with this OpenCode version; use task_with_model to choose a model."
