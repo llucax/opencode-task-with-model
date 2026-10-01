@@ -9,7 +9,7 @@
     "check": "npm run typecheck && npm test"
   },
   "devDependencies": {
-    "@opencode-ai/plugin": "1.18.32",
+    "@opencode-ai/plugin": "1.18.33",
     "typescript": "^5.7.0"
   },
   "dependencies": {
