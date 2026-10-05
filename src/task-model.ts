@@ -40,7 +40,7 @@ const TOOL_NOTE =
 	"Pass `model` (as provider/model) and optionally `variant` to run the subagent on another model than its agent's default."
 
 const FALLBACK_HINT =
-	"The model override for the task tool may have stopped working with this OpenCode version; use task_with_model to choose a model."
+	"The model override for the task tool may have stopped working with this OpenCode version; if task_with_model is available, use it to choose a model, otherwise tell the user."
 
 /** What a caller asked for. At least one of the two is set. */
 export interface Override {

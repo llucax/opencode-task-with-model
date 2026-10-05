@@ -150,7 +150,7 @@ it isn't the requested one, or the override never reached the child, the tool
 output starts with a line saying so, before the route line:
 
 ```text
-task: requested model anthropic/claude-opus-5 but the subagent ran on openai/gpt-6. The model override for the task tool may have stopped working with this OpenCode version; use task_with_model to choose a model.
+task: requested model anthropic/claude-opus-5 but the subagent ran on openai/gpt-6. The model override for the task tool may have stopped working with this OpenCode version; if task_with_model is available, use it to choose a model, otherwise tell the user.
 ```
 
 `task_with_model` doesn't depend on any of this, which is why it stays: it is
